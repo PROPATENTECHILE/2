@@ -1,0 +1,151 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login - Pro Patente</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(to bottom right, #0f2027, #203a43, #2c5364);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+    .login-container {
+      background-color: rgba(0, 0, 0, 0.6);
+      padding: 40px;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+    }
+    input, button {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      margin-top: 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+    button {
+      background-color: #4caf50;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    #error-message {
+      color: red;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <h2>Iniciar Sesión</h2>
+    <input type="email" id="email" placeholder="Correo electrónico" />
+    <input type="password" id="password" placeholder="Contraseña" />
+    <button onclick="login()">Ingresar</button>
+    <p id="error-message"></p>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-auth.js";
+    import { getFirestore, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAVbnbZIKNoGwr8xJj9lvkml5QBf5RPTCA",
+      authDomain: "propatente.firebaseapp.com",
+      projectId: "propatente",
+      storageBucket: "propatente.firebasestorage.app",
+      messagingSenderId: "514353367543",
+      appId: "1:514353367543:web:52e8cd7fa24c8278d906f2",
+      measurementId: "G-6VVE5QSDEY"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const uid = user.uid;
+        const token = localStorage.getItem("token_sesion");
+        const userDocRef = doc(db, "usuarios", uid);
+        const userDoc = await getDoc(userDocRef);
+
+        if (!userDoc.exists()) {
+          await signOut(auth);
+          localStorage.clear();
+          location.href = "index.html";
+          return;
+        }
+
+        const data = userDoc.data();
+        const fechaExp = data.expira.toDate();
+        const ahora = new Date();
+
+        if (ahora > fechaExp) {
+          alert("Tu licencia ha expirado.");
+          await signOut(auth);
+          localStorage.clear();
+          location.href = "index.html";
+          return;
+        }
+
+        if (token) {
+          localStorage.setItem("uid", uid);
+          window.location.href = "app.html";
+        }
+      }
+    });
+
+    async function login() {
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value.trim();
+      const errorEl = document.getElementById("error-message");
+
+      try {
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        const userDocRef = doc(db, "usuarios", user.uid);
+        const userDoc = await getDoc(userDocRef);
+
+        if (!userDoc.exists()) {
+          errorEl.textContent = "Usuario no registrado.";
+          return;
+        }
+
+        const data = userDoc.data();
+        const fechaExp = data.expira.toDate();
+        const ahora = new Date();
+        if (ahora > fechaExp) {
+          errorEl.textContent = "Licencia expirada.";
+          return;
+        }
+
+        const tokenActual = crypto.randomUUID();
+        await updateDoc(userDocRef, { token_sesion: tokenActual });
+
+        localStorage.setItem("token_sesion", tokenActual);
+        localStorage.setItem("uid", user.uid);
+        window.location.href = "app.html";
+      } catch (error) {
+        errorEl.textContent = "Credenciales incorrectas o error al iniciar sesión.";
+        console.error(error);
+      }
+    }
+
+    window.login = login;
+  </script>
+</body>
+</html>
